@@ -9,6 +9,8 @@
 // Configuration
 const bool pretty = true; // pretty-print JSON data
 const float battery_capacity_Wh = 1400;
+const int cycle = 5000;
+const int grain = 5;
 
 // Sensors
 Adafruit_BMP280 bme; 
@@ -180,7 +182,9 @@ int rec_index = 0;
 // display mode
 const unsigned int DP_DETAILED = 0;
 const unsigned int DP_CHARGE_PERCENT = 1;
-const unsigned int N_DP = 2;
+const unsigned int DP_BATTERY_VOLTAGE = 2;
+const unsigned int DP_PANEL_POWER = 3;
+const unsigned int N_DP = 4;
 unsigned int disp_mode = DP_DETAILED;
 
 // display detailed data on LCD
@@ -258,15 +262,59 @@ void disp_detailed() {
   print_flt(cp,4,0); PRINT(" Wh"); 
 }
 
+// display charge percent only on LCD
+void disp_charge_percent() {
+  if (0 == rec_index) return; // no data yet
+
+  // Blank display, initialize options
+  M5.Lcd.setTextSize(15);
+  M5.Lcd.fillScreen( BLACK );
+  M5.Lcd.setCursor(0, 0);
+
+  M5.Lcd.setTextColor( WHITE ); 
+  PRINTLN("CHARGE");
+  print_flt(100*cs,3,0); PRINT("%");
+}
+
+// display battery voltage only on LCD
+void disp_battery_voltage() {
+  if (0 == rec_index) return; // no data yet
+
+  // Blank display, initialize options
+  M5.Lcd.setTextSize(15);
+  M5.Lcd.fillScreen( BLACK );
+  M5.Lcd.setCursor(0, 0);
+
+  M5.Lcd.setTextColor( WHITE ); 
+  PRINTLN("BATTERY");
+  print_flt(bus_V[2],6,2); PRINT("V");
+}
+
+// display panel power only on LCD
+void disp_panel_power() {
+  if (0 == rec_index) return; // no data yet
+
+  // Blank display, initialize options
+  M5.Lcd.setTextSize(15);
+  M5.Lcd.fillScreen( BLACK );
+  M5.Lcd.setCursor(0, 0);
+
+  M5.Lcd.setTextColor( WHITE ); 
+  PRINTLN("PANEL");
+  print_flt(power_W[0],6,2); PRINT("W");
+}
+
 void pi(int w) {
   if (pretty) while (w > 0) {
     Serial.print(" ");
     w--;
   }
 }
+
 void ps() {
   pi(1);
 }
+
 void pe(const char* text = "") {
   if (pretty) {
     Serial.println(text);
@@ -274,6 +322,7 @@ void pe(const char* text = "") {
     Serial.print(text);
   }
 }
+
 void send_rec(int w = 0) {
   pi(w);
   Serial.print("\"id\":");              
@@ -422,32 +471,76 @@ void send_all() {
   send_env(2,false); pe(",");
   pi(2); Serial.print("\"status\":"); ps();
   send_env(2,false); pe();
-  pe("};"); // use ";" as record separator
+  pe("}"); 
 }
+
+static int cycle_count = cycle/grain + 1;
+static int count = 0;
 
 void loop(void) 
 {
-  read_sensors();
-  rec_index++;
+  M5.update();
+  bool ui_update = false;
+  
+  // If A button released, rotate display modes
+  if (M5.BtnA.wasReleased()) {
+    Serial.println("BtnA.wasReleased;");
+    disp_mode = (disp_mode + 1) % N_DP;
+    ui_update = true;
+  }  
+  // If B button released, increase update interval
+  if (M5.BtnB.wasReleased()) {
+    Serial.println("BtnB.wasReleased;");
+    cycle_count += 50;
+    //Serial.print(cycle_count);    
+    //Serial.println(";");
+    ui_update = true;
+  } 
+  // If C button released, decrease update interval
+  if (M5.BtnC.wasReleased()) {
+    Serial.println("BtnC.wasReleased;");
+    cycle_count -= 50;
+    if (cycle_count <= 0) cycle_count = 1;
+    //Serial.print(cycle_count);    
+    //Serial.println(";");
+    ui_update = true;
+  } 
 
-  // If A button pressed, rotate display modes
-
-
-  // Display data using selected mode
-  switch (disp_mode) {
-     default:
-     case DP_DETAILED:
-       //disp_detailed();
-       break;
-     case DP_CHARGE_PERCENT:
-       // disp_charge_percent();
-       break;
-  };
+  if (0 == count) {
+    // Update sensor readings
+    read_sensors();
+    rec_index++;
+  }
+  
+  if (0 == count || ui_update) {
+    // Display data using selected mode
+    switch (disp_mode) {
+       case DP_DETAILED:
+         disp_detailed();
+         break;
+       case DP_CHARGE_PERCENT:
+         disp_charge_percent();
+         break;
+       case DP_BATTERY_VOLTAGE:
+         disp_battery_voltage();
+         break;
+       case DP_PANEL_POWER:
+         disp_panel_power();
+         break;
+       default:
+         Serial.println("Unknown display mode!");
+         break;
+    };
+  }
 
   // Read commands from serial input; as long as there are
-  // some, execute them until buffer is empty
- 
-  send_all();
+  //  some, execute them until buffer is empty
 
-  delay(5000);
+  if (0 == count) {
+    send_all();
+    Serial.println(";");
+  }
+
+  delay(grain);
+  count = (count + 1) % cycle_count;
 }
