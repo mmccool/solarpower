@@ -324,9 +324,15 @@ void pe(const char* text = "") {
 
 void send_rec(int w = 0) {
   pi(w);
-  Serial.print("\"id\":");              
+  Serial.print("\"index\":");              
   ps();
   Serial.print(rec_index);
+  pe(",");
+
+  pi(w);
+  Serial.print("\"timestamp\":");              
+  ps();
+  Serial.print(micros());
 }
 void send_channel(unsigned int ch, bool rec = true, int w = 0) {
   if (ch >= N_CHANNELS) return;
@@ -411,8 +417,14 @@ void send_power(int w = 0, bool rec = true) {
   Serial.print("}");
 }
 void send_env(int w = 0, bool rec = true) {
-  Serial.println("{");
+  Serial.print("{");
+  pe();
 
+  if (rec) {
+    send_rec(w+2);    
+    pe(","); 
+  }
+  
   pi(w+2);
   Serial.print("\"temperature_C\":"); 
   ps();
@@ -449,12 +461,12 @@ void send_status(int w = 0, bool rec = true) {
   ps();
   Serial.print(100*cs,2); 
   pe(",");
-
-  Serial.print(  "    \"charge_Wh\": ");     Serial.println(cp,2);     
+    
   pi(w+2);
   Serial.print("\"charge_Wh\":"); 
   ps();
-  Serial.print(cp,2); 
+  Serial.print(cp,2);
+  pe();
 
   pi(w);
   Serial.print("}");
@@ -463,14 +475,29 @@ void send_status(int w = 0, bool rec = true) {
 void send_all() {
   // Report Detailed Data via Serial Formatted as JSON
   Serial.println("{");
-  send_rec(d); pe(",");
-  pi(2); Serial.print("\"power\":"); ps();
-  send_power(2,false); pe(",");
-  pi(2); Serial.print("\"environment\":"); ps();
-  send_env(2,false); pe(",");
-  pi(2); Serial.print("\"status\":"); ps();
-  send_status(2,false); pe();
-  pe("}"); 
+  
+  send_rec(2); 
+  pe(",");
+  
+  pi(2); 
+  Serial.print("\"power\":"); 
+  ps();
+  send_power(2,false); 
+  pe(",");
+  
+  pi(2); 
+  Serial.print("\"environment\":"); 
+  ps();
+  send_env(2,false); 
+  pe(",");
+  
+  pi(2); 
+  Serial.print("\"status\":"); 
+  ps();
+  send_status(2,false); 
+  pe();
+  
+  Serial.print("}");
 }
 
 static int cycle_count = cycle/grain + 1;
@@ -532,7 +559,7 @@ void loop(void)
          disp_panel_power();
          break;
        default:
-         Serial.println("Unknown display mode! Reset to 0.");
+         // Serial.println("Unknown display mode! Reset to 0.");
          disp_mode = 0;
          break;
     };
@@ -545,12 +572,12 @@ void loop(void)
   char buffer[length];
   if (Serial.available()) {
     // parse a command; ";" is used as a termination character
-    Serial.readBytesUntil(';', buffer, length);
+    int k = Serial.readBytesUntil(';', buffer, length);
     // find first non-whitespace starting character
     int i = 0;
-    while (isWhiteSpace(buffer[i]) && i < length) i++;
-    // process command
-    if (i < length) {
+    while (i < k && isWhitespace(buffer[i])) i++;
+    // process command, if there is one
+    if (i < k) {
       char cmd = buffer[i];
       switch (cmd) {
         case 'a':
@@ -576,7 +603,7 @@ void loop(void)
           Serial.println(";");
           break;
         default:
-          Serial.println("unknown;");
+          // Serial.println("unknown;");
           break;
       }
     }
