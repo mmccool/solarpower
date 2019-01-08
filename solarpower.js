@@ -415,12 +415,6 @@ function server(req,res,opt) {
             }
             break;
         }
-        case '/api/all': 
-            handleProperty(res,path,method,"a");
-            break;
-        case '/api/power': 
-            handleProperty(res,path,method,"p");
-            break;
         case '/api/panel': 
             handleProperty(res,path,method,"0");
             break;

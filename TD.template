@@ -19,15 +19,13 @@
   }],
   "id": "urn:uuid:{{{uuid}}}",
   "securityDefinitions": {
-    "nosec_sc": {"scheme": "nosec"},
-    "basic_sc": {"scheme": "basic"},
-    "digest_sc": {"scheme": "digest"}
+    "nosec_sc": {"scheme": "nosec"}
   },
   "security": ["nosec_sc"],
   "properties": {
     "panel": {
-      "title": "Panel Input Power",
-      "description": "Power input from solar panel",
+      "title": "Solar Panel Input",
+      "description": "Input from solar panel",
       "@type": ["iot:CurrentLevel","iot:LevelData"],
       "type": "object",
       "properties": {
@@ -57,18 +55,136 @@
       },
       "readOnly": true,
       "observable": false,
+      "forms": [{
+          "href": "{{{base}}}/panel",
+          "contentType": "application/json",
+          "op": ["readproperty"],
+          "http:methodName": "GET"
+      }]
+    },
+    "charger": {
+      "title": "Charger Input",
+      "description": "Input from backup AC charger",
+      "@type": ["iot:CurrentLevel","iot:LevelData"],
+      "type": "object",
+      "properties": {
+         "index": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "timestamp": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "voltage": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 20.0
+         },
+         "current": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 5.0
+         },
+         "power": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 100.0
+         }
+      },
+      "readOnly": true,
+      "observable": false,
+      "forms": [{
+          "href": "{{{base}}}/charger",
+          "contentType": "application/json",
+          "op": ["readproperty"],
+          "http:methodName": "GET"
+      }]
+    },
+    "output": {
+      "title": "Battery Output",
+      "description": "DC battery output",
+      "@type": ["iot:CurrentLevel","iot:LevelData"],
+      "type": "object",
+      "properties": {
+         "index": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "timestamp": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "voltage": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 22.0
+         },
+         "current": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 10.0
+         },
+         "power": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 220.0
+         }
+      },
+      "readOnly": true,
+      "observable": false,
+      "forms": [{
+          "href": "{{{base}}}/output",
+          "contentType": "application/json",
+          "op": ["readproperty"],
+          "http:methodName": "GET"
+      }]
+    },
+    "environment": {
+      "title": "Environment",
+      "description": "Environmental data",
+      "@type": ["iot:CurrentLevel","iot:LevelData"],
+      "observable": true,
+      "type": "object",
+      "properties": {
+         "index": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "timestamp": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "temperature": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 60
+         },
+         "humidity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+         },
+         "pressure": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 15000.0
+         }
+      },
+      "readOnly": true,
+      "observable": false,
       "forms": [
         {
-          "href": "{{{base}}}/power/panel",
+          "href": "{{{base}}}/environment",
           "contentType": "application/json",
           "op": ["readproperty"],
           "http:methodName": "GET"
         }
       ]
-    },
+    }, 
     "status": {
       "title": "Status",
-      "description": "The current battery charge status",
+      "description": "Battery charge status",
       "@type": ["iot:CurrentLevel","iot:LevelData"],
       "observable": true,
       "type": "object",
