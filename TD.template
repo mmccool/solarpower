@@ -1,0 +1,112 @@
+{
+  "@context": ["http://www.w3.org/ns/td",
+               {
+                   "iot": "http://iotschema.org/",
+                   "http": "http://www.w3.org/2011/http#"
+               }
+  ],
+  "@type": ["Thing"],
+  "name": "SolarPowerMonitor-{{{name}}}-{{{device}}}",
+  "description": "Solar Power Monitor",
+  "support": "mailto:michael.mccool@intel.com",
+  "version": {"instance":"0.1.0"},
+  "created": "2019-01-08T06:30+00:00",
+  "lastModified": "2019-01-08T03:29+00:00",
+  "links": [{
+        "href": "https://github.com/mmccool/solarpower",
+        "rel": "repository",
+        "type": "application/vnd.github.v3+json"
+  }],
+  "id": "urn:uuid:{{{uuid}}}",
+  "securityDefinitions": {
+    "nosec_sc": {"scheme": "nosec"},
+    "basic_sc": {"scheme": "basic"},
+    "digest_sc": {"scheme": "digest"}
+  },
+  "security": ["nosec_sc"],
+  "properties": {
+    "panel": {
+      "title": "Panel Input Power",
+      "description": "Power input from solar panel",
+      "@type": ["iot:CurrentLevel","iot:LevelData"],
+      "type": "object",
+      "properties": {
+         "index": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "timestamp": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "voltage": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 21.0
+         },
+         "current": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 10.0
+         },
+         "power": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 210.0
+         }
+      },
+      "readOnly": true,
+      "observable": false,
+      "forms": [
+        {
+          "href": "{{{base}}}/power/panel",
+          "contentType": "application/json",
+          "op": ["readproperty"],
+          "http:methodName": "GET"
+        }
+      ]
+    },
+    "status": {
+      "title": "Status",
+      "description": "The current battery charge status",
+      "@type": ["iot:CurrentLevel","iot:LevelData"],
+      "observable": true,
+      "type": "object",
+      "properties": {
+         "index": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "timestamp": {
+            "type": "integer",
+            "minimum": 0
+         },
+         "capacity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+         },
+         "energy": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1500
+         },
+         "power": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 210.0
+         }
+      },
+      "readOnly": true,
+      "observable": false,
+      "forms": [
+        {
+          "href": "{{{base}}}/status",
+          "contentType": "application/json",
+          "op": ["readproperty"],
+          "http:methodName": "GET"
+        }
+      ]
+    } 
+  }
+}

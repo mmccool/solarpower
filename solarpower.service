@@ -1,0 +1,14 @@
+[Unit]
+Description=Solar Power Monitor
+Requires=network.target
+After=network.target
+
+[Service]
+Restart=always
+RestartSec=20
+User=solarpower
+ExecStart=/usr/bin/nodejs /home/solarpower/Arduino/solarpower/solarpower.js -d 0 -p 9195
+
+[Install]
+WantedBy=multi-user.target
+
