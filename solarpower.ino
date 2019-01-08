@@ -30,7 +30,7 @@ void setup(void)
   
   M5.Lcd.fillScreen( BLACK );
   M5.Lcd.setCursor(0, 0);
-  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextSize(10);
   M5.Lcd.setTextColor( YELLOW ); 
 
   M5.Lcd.println("Solar");
@@ -63,10 +63,9 @@ void setup(void)
   ina219_B.begin();
   ina219_C.begin();
   
-  // Slightly lower 32V, 1A range (higher precision on amps):
-  ina219_A.setCalibration_32V_1A();  // Panel max 21V
-  ina219_B.setCalibration_32V_1A();  // Charger nominal 16V, but may be slightly higher
-  // Lower 16V, 400mA range (higher precision on volts and amps):
+  // Set custom calibration ranges
+  ina219_A.setCalibration_32V_2A();  // Panel max 21V
+  ina219_B.setCalibration_32V_2A();  // Charger nominal 16V, but may be slightly higher
   ina219_C.setCalibration_16V_400mA(); // Battery max 12.6V
 
   Serial.println("Measuring voltages and currents with INA219s");
@@ -76,13 +75,13 @@ void setup(void)
 
 // Channel configuration
 const unsigned int N_CHANNELS = 3;
-// correction factors
+// Correction factors
 const float cf[N_CHANNELS] = {
   7.0*1.13,
   7.0*1.8,
   7.0*1.1 
 };
-// names (JSON, Display)
+// Channel Names (JSON, Display)
 const char* cn[N_CHANNELS][2] = {
   { "panel",  "Panel" },
   { "charge", "Charge" },
