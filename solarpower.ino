@@ -373,7 +373,7 @@ void send_channel(unsigned int ch, bool rec = true, int w = 0) {
   pi(w);
   Serial.print("}");
 }
-void send_power(int w = 0, bool rec = false) {
+void send_power(int w = 0, bool rec = true) {
   Serial.print("{");
   pe();
 
@@ -410,7 +410,31 @@ void send_power(int w = 0, bool rec = false) {
   pi(w);
   Serial.print("}");
 }
-void send_charge(int w = 0, bool rec = false) {
+void send_env(int w = 0, bool rec = true) {
+  Serial.println("{");
+
+  pi(w+2);
+  Serial.print("\"temperature_C\":"); 
+  ps();
+  Serial.print(temperature,2); 
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"humidity_pcnt\":");
+  ps();
+  Serial.print(humidity,2);
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"pressure_Pa\": ");
+  ps();
+  Serial.print(pressure,2);  
+  pe();
+
+  pi(w);
+  Serial.print("}");
+}
+void send_status(int w = 0, bool rec = true) {
   Serial.print("{");
   pe();
 
@@ -435,41 +459,17 @@ void send_charge(int w = 0, bool rec = false) {
   pi(w);
   Serial.print("}");
 }
-void send_env(int w = 0, bool rec = false) {
-  Serial.println("{");
-
-  pi(w+2);
-  Serial.print("\"temperature_C\":"); 
-  ps();
-  Serial.print(temperature,2); 
-  pe(",");
-
-  pi(w+2);
-  Serial.print("\"humidity_pcnt\":");
-  ps();
-  Serial.print(humidity,2);
-  pe(",");
-
-  pi(w+2);
-  Serial.print("\"pressure_Pa\": ");
-  ps();
-  Serial.print(pressure,2);  
-  pe();
-
-  pi(w);
-  Serial.print("}");
-}
 
 void send_all() {
   // Report Detailed Data via Serial Formatted as JSON
   Serial.println("{");
-  send_rec(2); pe(",");
+  send_rec(d); pe(",");
   pi(2); Serial.print("\"power\":"); ps();
   send_power(2,false); pe(",");
   pi(2); Serial.print("\"environment\":"); ps();
   send_env(2,false); pe(",");
   pi(2); Serial.print("\"status\":"); ps();
-  send_env(2,false); pe();
+  send_status(2,false); pe();
   pe("}"); 
 }
 
@@ -483,25 +483,30 @@ void loop(void)
   
   // If A button released, rotate display modes
   if (M5.BtnA.wasReleased()) {
-    Serial.println("BtnA.wasReleased;");
     disp_mode = (disp_mode + 1) % N_DP;
+    Serial.println("{\"button\": \"BtnA.wasReleased\",");
+    Serial.print(" \"disp_mode\": ");
+    Serial.print(disp_mode);
+    Serial.println("};");
     ui_update = true;
   }  
   // If B button released, increase update interval
   if (M5.BtnB.wasReleased()) {
-    Serial.println("BtnB.wasReleased;");
     cycle_count += 50;
-    //Serial.print(cycle_count);    
-    //Serial.println(";");
+    Serial.println("{\"button\": \"BtnB.wasReleased\",");
+    Serial.print(" \"cycle_count\": ");
+    Serial.print(cycle_count);
+    Serial.println("};");
     ui_update = true;
   } 
   // If C button released, decrease update interval
   if (M5.BtnC.wasReleased()) {
-    Serial.println("BtnC.wasReleased;");
     cycle_count -= 50;
     if (cycle_count <= 0) cycle_count = 1;
-    //Serial.print(cycle_count);    
-    //Serial.println(";");
+    Serial.println("{\"button\": \"BtnC.wasReleased\",");
+    Serial.print(" \"cycle_count\": ");
+    Serial.print(cycle_count);
+    Serial.println("};");
     ui_update = true;
   } 
 
@@ -527,17 +532,54 @@ void loop(void)
          disp_panel_power();
          break;
        default:
-         Serial.println("Unknown display mode!");
+         Serial.println("Unknown display mode! Reset to 0.");
+         disp_mode = 0;
          break;
     };
   }
 
-  // Read commands from serial input; as long as there are
-  //  some, execute them until buffer is empty
-
-  if (0 == count) {
-    send_all();
-    Serial.println(";");
+  // Read command from serial input
+  //  Reads and executes just one command per cycle to
+  //  avoid starvation of sensor readings
+  const int length = 100;
+  char buffer[length];
+  if (Serial.available()) {
+    // parse a command; ";" is used as a termination character
+    Serial.readBytesUntil(';', buffer, length);
+    // find first non-whitespace starting character
+    int i = 0;
+    while (isWhiteSpace(buffer[i]) && i < length) i++;
+    // process command
+    if (i < length) {
+      char cmd = buffer[i];
+      switch (cmd) {
+        case 'a':
+          send_all();
+          Serial.println(";");
+          break;
+        case 'p':
+          send_power(); 
+          Serial.println(";");
+          break;
+        case 'e':
+          send_env(); 
+          Serial.println(";");
+          break;
+        case 's':
+          send_status(); 
+          Serial.println(";");
+          break;
+        case '0':
+        case '1':
+        case '2':
+          send_channel((unsigned int)(cmd-'0')); 
+          Serial.println(";");
+          break;
+        default:
+          Serial.println("unknown;");
+          break;
+      }
+    }
   }
 
   delay(grain);
