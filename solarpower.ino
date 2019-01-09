@@ -571,7 +571,6 @@ void send_all() {
   Serial.print("}");
 }
 
-
 void loop(void) 
 {
   M5.update();
@@ -580,10 +579,10 @@ void loop(void)
   // If A button released, rotate display modes
   if (M5.BtnA.wasReleased()) {
     disp_mode = (disp_mode + 1) % N_DP;
-    Serial.println("\"A\":");
+    Serial.print("\"A\":");
     ps();
     Serial.println("\"released\";");
-    Serial.println("\"d\":");
+    Serial.print("\"d\":");
     ps();
     send_disp_mode();
     Serial.println(";");
@@ -595,7 +594,7 @@ void loop(void)
     Serial.print("\"B\":");
     ps();
     Serial.println("\"released\";");
-    Serial.println("\"y\":");
+    Serial.print("\"y\":");
     ps();
     send_period();
     Serial.println(";");
@@ -608,7 +607,7 @@ void loop(void)
     Serial.print("\"C\":");
     ps();
     Serial.println("\"released\";");
-    Serial.println("\"y\":");
+    Serial.print("\"y\":");
     ps();
     send_period();
     Serial.println(";");
