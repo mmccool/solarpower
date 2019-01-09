@@ -146,7 +146,6 @@ function regTD() {
     );
 }
 
-// Operations
 
 // Process JSON Body Parameters
 function processBodyParams(req,res,done) {
@@ -170,6 +169,35 @@ function processBodyParams(req,res,done) {
         }
     });
 }
+
+// Device Interface
+var device_properties;
+var device_interval;
+const SerialPort = require('serialport');
+const Delimiter = require('@serialport/parser-delimiter');
+const device_port = new SerialPort('/dev/ttyUSB'+device, {
+  baudRate: 115200,
+  autoOpen: true
+}).on('error', function(err) {
+  console.log('Serial Port Error: ', err.message)
+}).on('open', function(err) {
+  if (err) {
+    console.log('Serial Port Error: ', err.message)
+  } else {
+    // periodically ask for all properties
+    device_interval = setInterval(function() {
+      device_port.write("a;");
+      // note: errors will be handled by the above event
+    }, 5000);
+  }
+});
+const device_parser = device_port.pipe(new Delimiter({ delimiter: ';' }));
+device_parser.on('data', function(buffer) {
+  console.log("DEVICE RECORD:");
+  console.log(buffer);
+}); // emits record after every ';'
+
+// Poll device periodically, grab all parameters
 
 function device_getProperty(pname,done) {
   done(0,"get "+pname);
