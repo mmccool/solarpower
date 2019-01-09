@@ -1,4 +1,5 @@
 /* Solar Power Monitor */
+/* https://github.com/mmccool/solarpower */
 #include <M5Stack.h>
 #include <Adafruit_Sensor.h>
 #include "DHT12.h"
@@ -8,6 +9,7 @@
 
 // Configuration
 const bool pretty = true; // pretty-print JSON data
+
 const float battery_capacity_Wh = 1400;
 int cycle = 5000;
 const int cycle_inc = 10;
@@ -57,7 +59,9 @@ void setup(void)
 
   uint32_t currentFrequency;
     
+  Serial.println("==================================================================");
   Serial.println("Solar Power Monitor");
+  Serial.println("==================================================================");
   
   // Initialize the INA219s.
   // By default the initialization will use the largest range (32V, 2A).
@@ -73,6 +77,44 @@ void setup(void)
   Serial.println("Measuring voltages and currents with INA219s");
   Serial.println("Measuring temperature and humidity with DHT12");
   Serial.println("Measuring pressure with BMP280");
+  Serial.println("------------------------------------------------------------------");
+
+  Serial.println("Parser should search up to first semicolon character and discard");
+  Serial.println("and discard it and everything before it.  After that, each record");
+  Serial.println("is separated by another semicolon.  Note that CR/LF is NOT a");
+  Serial.println("record separator, as when in pretty-printing mode long lines are");
+  Serial.println("broken up for readability.  Records consist of a pseudo-identifier");
+  Serial.println("in quotes, followed by a colon, followed by some JSON for the"); 
+  Serial.println("content.  The identifier is an echo of the command when a command");
+  Serial.println("is used to elicit a response, although note the system may also");
+  Serial.println("return data changed as the result of spontaneous events as well.");
+  Serial.println("Data returned also generally has a cycle index and a timestamp");
+  Serial.println("based on the number of elapsed microseconds since the system was");
+  Serial.println("last initialized.");
+  Serial.println("------------------------------------------------------------------");
+  Serial.println("COMMANDS");
+  Serial.println("In the following, <n> should be replaced with an integer.");
+  Serial.println("All commands should also be terminated with a semicolon.");
+  Serial.println("a    - return all state, including modes and latest sensor readings");
+  Serial.println("c    - return all the latest power readings");
+  Serial.println("c<n> - return the power readings for channel n");
+  Serial.println("e    - return current environmental readings");
+  Serial.println("d    - return current display mode");
+  Serial.println("d<n> - set current display mode");
+  Serial.println("s    - return estimated battery charge status");
+  Serial.println("y    - return current cycle time (sampling period)");
+  Serial.println("y<n> - set current cycle time (number of grains)");
+  Serial.println("------------------------------------------------------------------");
+  Serial.println("EVENTS");
+  Serial.println("The following may be returned spontaneously:");
+  Serial.println("A    - button A event (payload is a string giving press type)");
+  Serial.println("B    - button B event (payload is a string giving press type)");
+  Serial.println("C    - button C event (payload is a string giving press type)");
+  Serial.println("Other records for modified data may follow events.");
+
+  // End of preamble/start of parseable data 
+  Serial.print(  "===================================================================");
+  Serial.println(";"); // first record separator
 }
 
 // Channel configuration
@@ -85,9 +127,9 @@ const float cf[N_CHANNELS] = {
 };
 // Channel Names (JSON, Display)
 const char* cn[N_CHANNELS][2] = {
-  { "panel",  "Panel" },
-  { "charge", "Charge" },
-  { "output", "Output" }
+  { "c0",  "Panel" },
+  { "c1", "Charge" },
+  { "c2", "Output" }
 };
 
 // Last data read or computed
@@ -340,12 +382,14 @@ void pe(const char* text = "") {
 }
 
 void send_rec(int w = 0) {
+  // cycle index
   pi(w);
   Serial.print("\"index\":");              
   ps();
   Serial.print(rec_index);
   pe(",");
 
+  // timestamp
   pi(w);
   Serial.print("\"timestamp\":");              
   ps();
@@ -499,7 +543,7 @@ void send_disp_mode(int w = 0, bool rec = true) {
   }
 
   pi(w+2);
-  Serial.print("\"mode\":"); 
+  Serial.print("\"disp_mode\":"); 
   ps();
   Serial.print(disp_mode); 
   pe();
@@ -549,37 +593,38 @@ void send_period(int w = 0, bool rec = true) {
 
 void send_all() {
   // Report Detailed Data via Serial Formatted as JSON
-  Serial.println("{");
+  Serial.print("{");
+  pe();
   
   send_rec(2); 
   pe(",");
   
   pi(2); 
-  Serial.print("\"power\":"); 
+  Serial.print("\"c\":"); 
   ps();
   send_power(2,false); 
   pe(",");
   
   pi(2); 
-  Serial.print("\"environment\":"); 
+  Serial.print("\"e\":"); 
   ps();
   send_env(2,false); 
   pe(",");
   
   pi(2); 
-  Serial.print("\"status\":"); 
+  Serial.print("\"s\":"); 
   ps();
   send_status(2,false); 
   pe(",");
 
   pi(2); 
-  Serial.print("\"disp_mode\":"); 
+  Serial.print("\"d\":"); 
   ps();
   send_disp_mode(2,false); 
   pe(",");
 
   pi(2); 
-  Serial.print("\"period\":"); 
+  Serial.print("\"y\":"); 
   ps();
   send_period(2,false); 
   pe();
@@ -677,49 +722,67 @@ void loop(void)
         Serial.print("\"");
         Serial.print(buffer);
         Serial.print("\":");
+        ps();
         char cmd = buffer[i];
         switch (cmd) {
           case 'a': {
-            send_all();
+            if (i + 1 == k) {
+              send_all();
+            } else {
+              Serial.print("\"unknown\"");
+            }
             Serial.println(";");
           } break;
           case 'd': {
-            if ('=' == buffer[i+1] && isDigit(buffer[i+2])) {
-              unsigned int new_disp_mode = (unsigned int)(buffer[i+2] - '0');
+            if (isDigit(buffer[i+1])) {
+              unsigned int new_disp_mode = (unsigned int)(buffer[i+1] - '0');
               if (new_disp_mode < N_DP) {
                 disp_mode = new_disp_mode;
+                send_disp_mode();
+              } else {
+                Serial.print("\"unknown\"");
               }
+            } else {
+              send_disp_mode();
             }
-            send_disp_mode();
-            Serial.println(";");
-          } break;
-          case 'p': {
-            send_power(); 
             Serial.println(";");
           } break;
           case 'e': {
-            send_env(); 
+            if (i + 1 == k) {
+              send_env(); 
+            } else {
+              Serial.print("\"unknown\"");
+            }
             Serial.println(";");
           } break;
           case 's': {
-            send_status(); 
+            if (i + 1 == k) {
+              send_status(); 
+            } else {
+              Serial.print("\"unknown\"");
+            }
             Serial.println(";");
           } break;
           case 'c': {
-            // get channel number
-            unsigned int ch = (unsigned int)(buffer[i+1] - '0');
-            // if a valid channel, print out data
-            if (ch < N_CHANNELS) {
-              send_channel(ch); 
-              Serial.println(";");
+            if (i+1 == k) {
+              // all channels
+              send_power(); 
             } else {
-              Serial.println("\"unknown\";");
+              // get channel number
+              unsigned int ch = (unsigned int)(buffer[i+1] - '0');
+              // if a valid channel, print out data
+              if (ch < N_CHANNELS) {
+                send_channel(ch); 
+              } else {
+                Serial.print("\"unknown\"");
+              }
             }
+            Serial.println(";");
           } break;
           case 'y': {
-            if ('=' == buffer[i+1] && isDigit(buffer[i+2])) {
-              unsigned int new_cycle_count = (unsigned int)(buffer[i+2] - '0');
-              int j = 3;
+            if (isDigit(buffer[i+1])) {
+              unsigned int new_cycle_count = (unsigned int)(buffer[i+1] - '0');
+              int j = 2;
               while (i+j < k && isDigit(buffer[i+j])) {
                 new_cycle_count = 10*new_cycle_count
                                 + (unsigned int)(buffer[i+j] - '0');
