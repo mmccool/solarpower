@@ -10,6 +10,7 @@
 const bool pretty = true; // pretty-print JSON data
 const float battery_capacity_Wh = 1400;
 int cycle = 5000;
+const int cycle_inc = 10;
 const int grain = 5;
 
 // Sensors
@@ -184,7 +185,8 @@ const unsigned int DP_DETAILED = 0;
 const unsigned int DP_CHARGE_PERCENT = 1;
 const unsigned int DP_BATTERY_VOLTAGE = 2;
 const unsigned int DP_PANEL_POWER = 3;
-const unsigned int N_DP = 4;
+const unsigned int DP_CYCLE_TIME = 4;
+const unsigned int N_DP = 5;
 unsigned int disp_mode = DP_DETAILED;
 
 // display detailed data on LCD
@@ -302,6 +304,20 @@ void disp_panel_power() {
   M5.Lcd.setTextColor( WHITE ); 
   PRINTLN("PANEL");
   print_flt(power_W[0],6,2); PRINT("W");
+}
+
+// display cycle time only on LCD
+void disp_cycle_time() {
+  if (0 == rec_index) return; // no data yet
+
+  // Blank display, initialize options
+  M5.Lcd.setTextSize(15);
+  M5.Lcd.fillScreen( BLACK );
+  M5.Lcd.setCursor(0, 0);
+
+  M5.Lcd.setTextColor( WHITE ); 
+  PRINTLN("CYCLE");
+  print_flt(cycle/1000.0,6,2); PRINT("s");
 }
 
 void pi(int w) {
@@ -491,7 +507,7 @@ void send_disp_mode(int w = 0, bool rec = true) {
   pi(w);
   Serial.print("}");
 }
-static int cycle_count = cycle/grain + 1;
+static int cycle_count = cycle/grain;
 static int count = 0;
 void send_period(int w = 0, bool rec = true) {
   Serial.print("{");
@@ -578,42 +594,63 @@ void loop(void)
   
   // If A button released, rotate display modes
   if (M5.BtnA.wasReleased()) {
-    disp_mode = (disp_mode + 1) % N_DP;
     Serial.print("\"A\":");
     ps();
     Serial.println("\"released\";");
+
+    disp_mode = (disp_mode + 1) % N_DP;
+
     Serial.print("\"d\":");
     ps();
     send_disp_mode();
     Serial.println(";");
+
     ui_update = true;
   }  
   // If B button released, increase update interval
   if (M5.BtnB.wasReleased()) {
-    cycle_count += 50;
-    cycle = grain * cycle_count;
     Serial.print("\"B\":");
     ps();
     Serial.println("\"released\";");
-    Serial.print("\"y\":");
-    ps();
-    send_period();
-    Serial.println(";");
-    ui_update = true;
+
+    switch (disp_mode) {
+      case DP_CYCLE_TIME: {
+        cycle_count += cycle_inc;
+        cycle = grain * cycle_count;
+
+        Serial.print("\"y\":");
+        ps();
+        send_period();
+        Serial.println(";");
+
+        ui_update = true;
+      } break;
+      default: {
+      } break;
+    }
   } 
   // If C button released, decrease update interval
   if (M5.BtnC.wasReleased()) {
-    cycle_count -= 50;
-    if (cycle_count <= 0) cycle_count = 1;
-    cycle = grain * cycle_count;
     Serial.print("\"C\":");
     ps();
     Serial.println("\"released\";");
-    Serial.print("\"y\":");
-    ps();
-    send_period();
-    Serial.println(";");
-    ui_update = true;
+
+    switch (disp_mode) {
+      case DP_CYCLE_TIME: {
+        cycle_count -= cycle_inc;
+        if (cycle_count < 0) cycle_count = 0;
+        cycle = grain * cycle_count;
+
+        Serial.print("\"y\":");
+        ps();
+        send_period();
+        Serial.println(";");
+
+        ui_update = true;
+      } break;
+      default: {
+      } break;
+    }
   } 
 
   if (0 == count) {
@@ -717,6 +754,9 @@ void loop(void)
        case DP_PANEL_POWER:
          disp_panel_power();
          break;
+       case DP_CYCLE_TIME:
+         disp_cycle_time();
+         break;
        default:
          // Unknown display mode! Reset to 0
          disp_mode = 0;
@@ -729,5 +769,5 @@ void loop(void)
   }
 
   delay(grain);
-  count = (count + 1) % cycle_count;
+  count = (count + 1) % (cycle_count + 1);
 }
