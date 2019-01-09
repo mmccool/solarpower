@@ -9,7 +9,7 @@
 // Configuration
 const bool pretty = true; // pretty-print JSON data
 const float battery_capacity_Wh = 1400;
-const int cycle = 5000;
+int cycle = 5000;
 const int grain = 5;
 
 // Sensors
@@ -591,6 +591,7 @@ void loop(void)
   // If B button released, increase update interval
   if (M5.BtnB.wasReleased()) {
     cycle_count += 50;
+    cycle = grain * cycle_count;
     Serial.print("\"B\":");
     ps();
     Serial.println("\"released\";");
@@ -604,6 +605,7 @@ void loop(void)
   if (M5.BtnC.wasReleased()) {
     cycle_count -= 50;
     if (cycle_count <= 0) cycle_count = 1;
+    cycle = grain * cycle_count;
     Serial.print("\"C\":");
     ps();
     Serial.println("\"released\";");
@@ -624,7 +626,7 @@ void loop(void)
   //  Reads and executes just one command per cycle to
   //  avoid starvation of sensor readings
   const int length = 100;
-  char buffer[length+1];
+  char buffer[length+2];
   if (Serial.available()) {
     // parse a command; ";" is used as a termination character
     int k = Serial.readBytesUntil(';', buffer, length);
@@ -645,6 +647,12 @@ void loop(void)
             Serial.println(";");
           } break;
           case 'd': {
+            if ('=' == buffer[i+1] && isDigit(buffer[i+2])) {
+              unsigned int new_disp_mode = (unsigned int)(buffer[i+2] - '0');
+              if (new_disp_mode < N_DP) {
+                disp_mode = new_disp_mode;
+              }
+            }
             send_disp_mode();
             Serial.println(";");
           } break;
@@ -672,6 +680,17 @@ void loop(void)
             }
           } break;
           case 'y': {
+            if ('=' == buffer[i+1] && isDigit(buffer[i+2])) {
+              unsigned int new_cycle_count = (unsigned int)(buffer[i+2] - '0');
+              int j = 3;
+              while (i+j < k && isDigit(buffer[i+j])) {
+                new_cycle_count = 10*new_cycle_count
+                                + (unsigned int)(buffer[i+j] - '0');
+                j++;
+              }
+              cycle_count = new_cycle_count;
+              cycle = grain * cycle_count;
+            }
             send_period();
             Serial.println(";");
           } break;
