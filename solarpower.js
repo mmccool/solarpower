@@ -174,13 +174,20 @@ function processBodyParams(req,res,done) {
 var device_properties;
 var device_interval;
 const SerialPort = require('serialport');
-const Delimiter = require('@serialport/parser-delimiter');
 const device_port = new SerialPort('/dev/ttyUSB'+device, {
   baudRate: 115200,
-  autoOpen: true
-}).on('error', function(err) {
+  autoOpen: false
+});
+device_port.on('error', function(err) {
   console.log('Serial Port Error: ', err.message)
-}).on('open', function(err) {
+});
+device_port.open(function (err) {
+  if (err) {
+    console.log('Error opening Serial Port: ', err.message)
+  }
+});
+/*
+device_port.on('open', function(err) {
   if (err) {
     console.log('Serial Port Error: ', err.message)
   } else {
@@ -191,11 +198,15 @@ const device_port = new SerialPort('/dev/ttyUSB'+device, {
     }, 5000);
   }
 });
+*/
+/*
+const Delimiter = require('@serialport/parser-delimiter');
 const device_parser = device_port.pipe(new Delimiter({ delimiter: ';' }));
 device_parser.on('data', function(buffer) {
   console.log("DEVICE RECORD:");
   console.log(buffer);
 }); // emits record after every ';'
+*/
 
 // Poll device periodically, grab all parameters
 
