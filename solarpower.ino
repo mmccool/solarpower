@@ -23,7 +23,8 @@ void setup(void)
 {
   M5.begin();
   Wire.begin();
-  Wire.setClock(100000); // Std I2C Speed (Fast does not work reliably with BMP280)
+  // Set standard I2C Speed (fast does not work reliably with BMP280)
+  Wire.setClock(100000); 
   
   M5.Lcd.begin();
   M5.Lcd.setBrightness(10);
@@ -471,6 +472,64 @@ void send_status(int w = 0, bool rec = true) {
   pi(w);
   Serial.print("}");
 }
+void send_disp_mode(int w = 0, bool rec = true) {
+  Serial.print("{");
+  pe();
+
+  if (rec) {
+    send_rec(w+2);    
+    Serial.print(",");
+    pe();
+  }
+
+  pi(w+2);
+  Serial.print("\"mode\":"); 
+  ps();
+  Serial.print(disp_mode); 
+  pe();
+    
+  pi(w);
+  Serial.print("}");
+}
+static int cycle_count = cycle/grain + 1;
+static int count = 0;
+void send_period(int w = 0, bool rec = true) {
+  Serial.print("{");
+  pe();
+
+  if (rec) {
+    send_rec(w+2);    
+    Serial.print(",");
+    pe();
+  }
+
+  pi(w+2);
+  Serial.print("\"grain\":"); 
+  ps();
+  Serial.print(grain); 
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"cycle\":"); 
+  ps();
+  Serial.print(cycle); 
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"count\":"); 
+  ps();
+  Serial.print(count); 
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"cycle_count\":"); 
+  ps();
+  Serial.print(cycle_count); 
+  pe();
+    
+  pi(w);
+  Serial.print("}");
+}
 
 void send_all() {
   // Report Detailed Data via Serial Formatted as JSON
@@ -495,13 +554,23 @@ void send_all() {
   Serial.print("\"status\":"); 
   ps();
   send_status(2,false); 
+  pe(",");
+
+  pi(2); 
+  Serial.print("\"disp_mode\":"); 
+  ps();
+  send_disp_mode(2,false); 
+  pe(",");
+
+  pi(2); 
+  Serial.print("\"period\":"); 
+  ps();
+  send_period(2,false); 
   pe();
   
   Serial.print("}");
 }
 
-static int cycle_count = cycle/grain + 1;
-static int count = 0;
 
 void loop(void) 
 {
@@ -511,29 +580,38 @@ void loop(void)
   // If A button released, rotate display modes
   if (M5.BtnA.wasReleased()) {
     disp_mode = (disp_mode + 1) % N_DP;
-    Serial.println("{\"button\": \"BtnA.wasReleased\",");
-    Serial.print(" \"disp_mode\": ");
-    Serial.print(disp_mode);
-    Serial.println("};");
+    Serial.println("\"A\":");
+    ps();
+    Serial.println("\"released\";");
+    Serial.println("\"d\":");
+    ps();
+    send_disp_mode();
+    Serial.println(";");
     ui_update = true;
   }  
   // If B button released, increase update interval
   if (M5.BtnB.wasReleased()) {
     cycle_count += 50;
-    Serial.println("{\"button\": \"BtnB.wasReleased\",");
-    Serial.print(" \"cycle_count\": ");
-    Serial.print(cycle_count);
-    Serial.println("};");
+    Serial.print("\"B\":");
+    ps();
+    Serial.println("\"released\";");
+    Serial.println("\"y\":");
+    ps();
+    send_period();
+    Serial.println(";");
     ui_update = true;
   } 
   // If C button released, decrease update interval
   if (M5.BtnC.wasReleased()) {
     cycle_count -= 50;
     if (cycle_count <= 0) cycle_count = 1;
-    Serial.println("{\"button\": \"BtnC.wasReleased\",");
-    Serial.print(" \"cycle_count\": ");
-    Serial.print(cycle_count);
-    Serial.println("};");
+    Serial.print("\"C\":");
+    ps();
+    Serial.println("\"released\";");
+    Serial.println("\"y\":");
+    ps();
+    send_period();
+    Serial.println(";");
     ui_update = true;
   } 
 
@@ -542,7 +620,70 @@ void loop(void)
     read_sensors();
     rec_index++;
   }
-  
+
+  // Read command from serial input
+  //  Reads and executes just one command per cycle to
+  //  avoid starvation of sensor readings
+  const int length = 100;
+  char buffer[length+1];
+  if (Serial.available()) {
+    // parse a command; ";" is used as a termination character
+    int k = Serial.readBytesUntil(';', buffer, length);
+    if (k <= length) {
+      buffer[k] = '\0';  // make sure buffer is null-terminated
+      // find first non-whitespace starting character
+      int i = 0;
+      while (i < k && isWhitespace(buffer[i])) i++;
+      // process command, if there is one
+      if (i < k && isPrintable(buffer[i])) {
+        Serial.print("\"");
+        Serial.print(buffer);
+        Serial.print("\":");
+        char cmd = buffer[i];
+        switch (cmd) {
+          case 'a': {
+            send_all();
+            Serial.println(";");
+          } break;
+          case 'd': {
+            send_disp_mode();
+            Serial.println(";");
+          } break;
+          case 'p': {
+            send_power(); 
+            Serial.println(";");
+          } break;
+          case 'e': {
+            send_env(); 
+            Serial.println(";");
+          } break;
+          case 's': {
+            send_status(); 
+            Serial.println(";");
+          } break;
+          case 'c': {
+            // get channel number
+            unsigned int ch = (unsigned int)(buffer[i+1] - '0');
+            // if a valid channel, print out data
+            if (ch < N_CHANNELS) {
+              send_channel(ch); 
+              Serial.println(";");
+            } else {
+              Serial.println("\"unknown\";");
+            }
+          } break;
+          case 'y': {
+            send_period();
+            Serial.println(";");
+          } break;
+          default: {
+            Serial.println("\"unknown\";");
+          } break;
+        }
+      }
+    }
+  }
+
   if (0 == count || ui_update) {
     // Display data using selected mode
     switch (disp_mode) {
@@ -559,54 +700,14 @@ void loop(void)
          disp_panel_power();
          break;
        default:
-         // Serial.println("Unknown display mode! Reset to 0.");
+         // Unknown display mode! Reset to 0
          disp_mode = 0;
+         Serial.println("\"d\":");
+         ps();
+         send_disp_mode();
+         Serial.println(";");
          break;
     };
-  }
-
-  // Read command from serial input
-  //  Reads and executes just one command per cycle to
-  //  avoid starvation of sensor readings
-  const int length = 100;
-  char buffer[length];
-  if (Serial.available()) {
-    // parse a command; ";" is used as a termination character
-    int k = Serial.readBytesUntil(';', buffer, length);
-    // find first non-whitespace starting character
-    int i = 0;
-    while (i < k && isWhitespace(buffer[i])) i++;
-    // process command, if there is one
-    if (i < k) {
-      char cmd = buffer[i];
-      switch (cmd) {
-        case 'a':
-          send_all();
-          Serial.println(";");
-          break;
-        case 'p':
-          send_power(); 
-          Serial.println(";");
-          break;
-        case 'e':
-          send_env(); 
-          Serial.println(";");
-          break;
-        case 's':
-          send_status(); 
-          Serial.println(";");
-          break;
-        case '0':
-        case '1':
-        case '2':
-          send_channel((unsigned int)(cmd-'0')); 
-          Serial.println(";");
-          break;
-        default:
-          // Serial.println("unknown;");
-          break;
-      }
-    }
   }
 
   delay(grain);
