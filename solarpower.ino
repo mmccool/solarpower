@@ -442,7 +442,6 @@ void send_channel(unsigned int ch, bool rec = true, int w = 0) {
   Serial.print("\"power_W\":"); 
   ps(); 
   Serial.print(power_W[ch],2); 
-  Serial.print(","); 
   pe();
 
   pi(w);
@@ -851,7 +850,7 @@ void loop(void)
 
   // Send all data automatically each cycle in "observe" mode
   if (0 == count && observe_mode && 'a' != buffer[0]) {
-    Serial.print("\"a:\"");
+    Serial.print("\"a\":");
     ps();
     send_all();
     Serial.println(";");

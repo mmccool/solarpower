@@ -176,39 +176,41 @@ var device_interval;
 const SerialPort = require('serialport');
 const device_port = new SerialPort('/dev/ttyUSB'+device, {
   baudRate: 115200,
-  autoOpen: false
+  autoOpen: true
 });
 device_port.on('error', function(err) {
   console.log('Serial Port Error: ', err.message)
 });
-device_port.open(function (err) {
-  if (err) {
-    console.log('Error opening Serial Port: ', err.message)
-  }
-});
-/*
 device_port.on('open', function(err) {
   if (err) {
     console.log('Serial Port Error: ', err.message)
   } else {
-    // periodically ask for all properties
-    device_interval = setInterval(function() {
-      device_port.write("a;");
-      // note: errors will be handled by the above event
-    }, 5000);
+    console.log('Serial Port Open');
+    // turn on "observe" mode to periodically get all properties
+    device_port.write("o1;");
   }
 });
-*/
-/*
 const Delimiter = require('@serialport/parser-delimiter');
 const device_parser = device_port.pipe(new Delimiter({ delimiter: ';' }));
 device_parser.on('data', function(buffer) {
   console.log("DEVICE RECORD:");
-  console.log(buffer);
+  console.log("STRING");
+  var str = buffer.toString();
+  console.log(str);
+  let i = str.indexOf(':');
+  let label = str.slice(0,i);
+  console.log("LABEL:",label);
+  let body = str.slice(i+1);
+  console.log("BODY:",body);
+  let json_label = JSON.parse(label);
+  let json_body = JSON.parse(body);
+  console.log("JSON LABEL:",json_label);
+  console.log("JSON BODY:",json_body);
+  if ("a" === json_label) {
+    console.log("observed");
+    device_properties = json_body;
+  }
 }); // emits record after every ';'
-*/
-
-// Poll device periodically, grab all parameters
 
 function device_getProperty(pname,done) {
   done(0,"get "+pname);
