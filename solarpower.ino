@@ -1,5 +1,7 @@
-/* Solar Power Monitor */
-/* https://github.com/mmccool/solarpower */
+/* Solar Power Monitor 
+ * 2019 Michael McCool
+ * See initial serial port output (or read it below) for usage instructions.
+ * https://github.com/mmccool/solarpower */
 #include <M5Stack.h>
 #include <Adafruit_Sensor.h>
 #include "DHT12.h"
@@ -100,8 +102,10 @@ void setup(void)
   Serial.println("c<n> - return the power readings for channel n");
   Serial.println("e    - return current environmental readings");
   Serial.println("d    - return current display mode");
-  Serial.println("d<n> - set current display mode");
+  Serial.println("d<n> - set display mode");
   Serial.println("s    - return estimated battery charge status");
+  Serial.println("o    - return current observe mode");
+  Serial.println("o<n> - set observe mode on (n=1) or off (n=0)");
   Serial.println("y    - return current cycle time (sampling period)");
   Serial.println("y<n> - set current cycle time (number of grains)");
   Serial.println("------------------------------------------------------------------");
@@ -110,7 +114,8 @@ void setup(void)
   Serial.println("A    - button A event (payload is a string giving press type)");
   Serial.println("B    - button B event (payload is a string giving press type)");
   Serial.println("C    - button C event (payload is a string giving press type)");
-  Serial.println("Other records for modified data may follow events.");
+  Serial.println("Other records for modified data may follow events or be issued");
+  Serial.println("autonomously if observe mode is on");
 
   // End of preamble/start of parseable data 
   Serial.print(  "===================================================================");
@@ -230,6 +235,9 @@ const unsigned int DP_PANEL_POWER = 3;
 const unsigned int DP_CYCLE_TIME = 4;
 const unsigned int N_DP = 5;
 unsigned int disp_mode = DP_DETAILED;
+
+// observation mode
+bool observe_mode = false;
 
 // display detailed data on LCD
 void disp_detailed() {
@@ -551,6 +559,25 @@ void send_disp_mode(int w = 0, bool rec = true) {
   pi(w);
   Serial.print("}");
 }
+void send_observe_mode(int w = 0, bool rec = true) {
+  Serial.print("{");
+  pe();
+
+  if (rec) {
+    send_rec(w+2);    
+    Serial.print(",");
+    pe();
+  }
+
+  pi(w+2);
+  Serial.print("\"observe_mode\":"); 
+  ps();
+  Serial.print(observe_mode ? 1 : 0); 
+  pe();
+    
+  pi(w);
+  Serial.print("}");
+}
 static int cycle_count = cycle/grain;
 static int count = 0;
 void send_period(int w = 0, bool rec = true) {
@@ -621,6 +648,12 @@ void send_all() {
   Serial.print("\"d\":"); 
   ps();
   send_disp_mode(2,false); 
+  pe(",");
+
+  pi(2); 
+  Serial.print("\"o\":"); 
+  ps();
+  send_observe_mode(2,false); 
   pe(",");
 
   pi(2); 
@@ -733,6 +766,22 @@ void loop(void)
             }
             Serial.println(";");
           } break;
+          case 'c': {
+            if (i+1 == k) {
+              // all channels
+              send_power(); 
+            } else {
+              // get channel number
+              unsigned int ch = (unsigned int)(buffer[i+1] - '0');
+              // if a valid channel, print out data
+              if (ch < N_CHANNELS) {
+                send_channel(ch); 
+              } else {
+                Serial.print("\"unknown\"");
+              }
+            }
+            Serial.println(";");
+          } break;
           case 'd': {
             if (isDigit(buffer[i+1])) {
               unsigned int new_disp_mode = (unsigned int)(buffer[i+1] - '0');
@@ -744,6 +793,20 @@ void loop(void)
               }
             } else {
               send_disp_mode();
+            }
+            Serial.println(";");
+          } break;
+          case 'o': {
+            if (isDigit(buffer[i+1])) {
+              unsigned int new_observe_mode = (unsigned int)(buffer[i+1] - '0');
+              if (new_observe_mode <= 1) {
+                observe_mode = (1 == new_observe_mode);
+                send_observe_mode();
+              } else {
+                Serial.print("\"unknown\"");
+              }
+            } else {
+              send_observe_mode();
             }
             Serial.println(";");
           } break;
@@ -760,22 +823,6 @@ void loop(void)
               send_status(); 
             } else {
               Serial.print("\"unknown\"");
-            }
-            Serial.println(";");
-          } break;
-          case 'c': {
-            if (i+1 == k) {
-              // all channels
-              send_power(); 
-            } else {
-              // get channel number
-              unsigned int ch = (unsigned int)(buffer[i+1] - '0');
-              // if a valid channel, print out data
-              if (ch < N_CHANNELS) {
-                send_channel(ch); 
-              } else {
-                Serial.print("\"unknown\"");
-              }
             }
             Serial.println(";");
           } break;
@@ -802,6 +849,15 @@ void loop(void)
     }
   }
 
+  // Send all data automatically each cycle in "observe" mode
+  if (0 == count && observe_mode && 'a' != buffer[0]) {
+    Serial.print("\"a:\"");
+    ps();
+    send_all();
+    Serial.println(";");
+  }
+
+  // Update UI if necessary
   if (0 == count || ui_update) {
     // Display data using selected mode
     switch (disp_mode) {
