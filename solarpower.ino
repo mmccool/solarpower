@@ -22,13 +22,14 @@ Adafruit_BMP280 bme;
 DHT12 dht12; 
 Adafruit_INA219 ina219_A(0x40); // solar panel input
 Adafruit_INA219 ina219_B(0x41); // charger input
-Adafruit_INA219 ina219_C(0x44); // output
+Adafruit_INA219 ina219_C(0x44); // internal output
+Adafruit_INA219 ina219_D(0x45); // external output
 
 void setup(void) 
 {
   M5.begin();
   Wire.begin();
-  // Set standard I2C Speed (fast does not work reliably with BMP280)
+  // Set standard I2C Speed ("fast" I2C does not work reliably with BMP280)
   Wire.setClock(100000); 
   
   M5.Lcd.begin();
@@ -70,11 +71,13 @@ void setup(void)
   ina219_A.begin();
   ina219_B.begin();
   ina219_C.begin();
+  ina219_D.begin();
   
   // Set custom calibration ranges
   ina219_A.setCalibration_32V_2A();  // Panel max 21V
   ina219_B.setCalibration_32V_2A();  // Charger nominal 16V, but may be slightly higher
   ina219_C.setCalibration_16V_400mA(); // Battery max 12.6V
+  ina219_D.setCalibration_16V_400mA(); // Battery max 12.6V
 
   Serial.println("Measuring voltages and currents with INA219s");
   Serial.println("Measuring temperature and humidity with DHT12");
@@ -123,18 +126,20 @@ void setup(void)
 }
 
 // Channel configuration
-const unsigned int N_CHANNELS = 3;
+const unsigned int N_CHANNELS = 4;
 // Correction factors
 const float cf[N_CHANNELS] = {
-  7.0*1.13,
-  7.0*1.8,
-  7.0*1.1 
+  5.0*1.0,
+  5.0*1.0,
+  5.0*1.0,
+  5.0*1.1 
 };
 // Channel Names (JSON, Display)
 const char* cn[N_CHANNELS][2] = {
-  { "c0",  "Panel" },
-  { "c1", "Charge" },
-  { "c2", "Output" }
+  { "c0", "In P  " }, // input from panel
+  { "c1", "In C  " }, // input from charger
+  { "c2", "Out I " }, // output - internal
+  { "c3", "Out E " }  // output - external 
 };
 
 // Last data read or computed
@@ -181,12 +186,19 @@ void read_sensors () {
   power_W[1] =   cf[1]*ina219_B.getPower_mW()/1000.0;
   load_V[1] =    bus_V[1] + shunt_mV[1]/1000.0;
  
-  // voltage, current, and power on channel C/2 (load)
+  // voltage, current, and power on channel C/2 (output 1 - internal)
   shunt_mV[2] =  ina219_C.getShuntVoltage_mV();
   bus_V[2] =     ina219_C.getBusVoltage_V();
   current_A[2] = cf[2]*ina219_C.getCurrent_mA()/1000.0;
   power_W[2] =   cf[2]*ina219_C.getPower_mW()/1000.0;
   load_V[2] =    bus_V[2] + shunt_mV[2]/1000.0;
+
+  // voltage, current, and power on channel D/3 (output 2 - external)
+  shunt_mV[3] =  ina219_D.getShuntVoltage_mV();
+  bus_V[3] =     ina219_D.getBusVoltage_V();
+  current_A[3] = cf[3]*ina219_D.getCurrent_mA()/1000.0;
+  power_W[3] =   cf[3]*ina219_D.getPower_mW()/1000.0;
+  load_V[3] =    bus_V[3] + shunt_mV[3]/1000.0;
 
   // environmental sensors
   temperature = dht12.readTemperature();
@@ -194,7 +206,7 @@ void read_sensors () {
   pressure = bme.readPressure();
 
   // charge state estimates
-  cs = voltage_to_cs(bus_V[2]); // load voltage is also battery voltage
+  cs = voltage_to_cs((bus_V[2]+bus_V[3])/2.0); // load voltage is also battery voltage
   cp = battery_capacity_Wh*cs;
 }
 
@@ -253,43 +265,20 @@ void disp_detailed() {
   M5.Lcd.setTextColor( YELLOW ); 
   PRINTLN("POWER");
   M5.Lcd.setTextColor( WHITE );
-  PRINTLN("    Panel Charge Output");
-  PRINT("B: "); 
-    print_flt(bus_V[0],cw,2);     
-    PRINT(" ");
-    print_flt(bus_V[1],cw,2);     
-    PRINT(" ");
-    print_flt(bus_V[2],cw,2);
-    PRINTLN(" V");
-  PRINT("S: ");
-    print_flt(shunt_mV[0],cw,2);   
-    PRINT(" ");
-    print_flt(shunt_mV[1],cw,2);   
-    PRINT(" ");   
-    print_flt(shunt_mV[2],cw,2);   
-    PRINTLN(" mV");
-  PRINT("L: ");
-    print_flt(load_V[0],cw,2);    
-    PRINT(" ");
-    print_flt(load_V[1],cw,2);    
-    PRINT(" ");   
-    print_flt(load_V[2],cw,2);    
-    PRINTLN(" V");
-  PRINT("C: "); 
-    print_flt(current_A[0],cw,2); 
-    PRINT(" ");
-    print_flt(current_A[1],cw,2); 
-    PRINT(" ");    
-    print_flt(current_A[2],cw,2); 
-    PRINTLN(" A");
-  PRINT("P: ");
-    print_flt(power_W[0],cw,2);   
-    PRINT(" ");
-    print_flt(power_W[1],cw,2);   
-    PRINT(" ");   
-    print_flt(power_W[2],cw,2);   
-    PRINTLN(" W");
-  PRINTLN("");
+  PRINTLN("           V      A      W");
+  for (int i; i<N_CHANNELS; i++) {
+    PRINT(cn[i][1]);
+    if (bus_V[i] > 32.7) {
+      PRINTLN("     x      x      x");
+    } else {
+      print_flt(bus_V[i],cw,2);     
+      PRINT(" ");
+      print_flt(current_A[i],cw,2);     
+      PRINT(" ");
+      print_flt(power_W[i],cw,2);
+      PRINTLN("");
+    }
+  }
 
   // Environmental Data
   M5.Lcd.setTextColor( GREEN ); 
