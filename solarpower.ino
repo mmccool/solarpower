@@ -19,19 +19,60 @@ const int grain = 5;
 
 // Sensors
 Adafruit_BMP280 bme; 
-DHT12 dht12; 
+DHT12 dht12;
+
+const int N_CHANNELS = 4;
+
 Adafruit_INA219 ina219_A(0x40); // solar panel input
 Adafruit_INA219 ina219_B(0x41); // charger input
 Adafruit_INA219 ina219_C(0x44); // internal output
 Adafruit_INA219 ina219_D(0x45); // external output
+
+const Adafruit_INA219* ina219[N_CHANNELS] = {
+  &ina219_A,
+  &ina219_B,
+  &ina219_C,
+  &ina219_D,
+};
+
+// Relays
+const int relay_pin[N_CHANNELS] = {
+  3, 
+  1, 
+  16, 
+  17
+};  // GPIOs for relays for above channels
+// Initial state of GPIOs
+bool relay_state[N_CHANNELS] = {
+  false,
+  false,
+  false, 
+  false
+};
+
+// Measurement correction factors (for current only)
+const float cf[N_CHANNELS] = {
+  5.0*1.0,
+  5.0*1.0,
+  5.0*1.0,
+  5.0*1.1 
+};
+
+// Channel Names (0:JSON, 1:Display)
+const char* cn[N_CHANNELS][2] = {
+  { "c0", "In P  " }, // input from panel
+  { "c1", "In C  " }, // input from charger
+  { "c2", "Out I " }, // output - internal
+  { "c3", "Out E " }  // output - external 
+};
 
 void setup(void) 
 {
   M5.begin();
   Wire.begin();
   // Set standard I2C Speed ("fast" I2C does not work reliably with BMP280)
-  Wire.setClock(100000); 
-  
+  Wire.setClock(100000);
+
   M5.Lcd.begin();
   M5.Lcd.setBrightness(10);
   
@@ -79,9 +120,16 @@ void setup(void)
   ina219_C.setCalibration_16V_400mA(); // Battery max 12.6V
   ina219_D.setCalibration_16V_400mA(); // Battery max 12.6V
 
+  // Set up Relay control GPIOs
+  for (int i=0; i<N_CHANNELS; i++) {
+    pinMode(relay_pin[i],OUTPUT);
+    digitalWrite(relay_pin[i],relay_state[i] ? HIGH : LOW);
+  }
+
   Serial.println("Measuring voltages and currents with INA219s");
   Serial.println("Measuring temperature and humidity with DHT12");
   Serial.println("Measuring pressure with BMP280");
+  Serial.println("Controlling channels with relays");
   Serial.println("------------------------------------------------------------------");
 
   Serial.println("Parser should search up to first semicolon character and discard");
@@ -124,23 +172,6 @@ void setup(void)
   Serial.print(  "===================================================================");
   Serial.println(";"); // first record separator
 }
-
-// Channel configuration
-const unsigned int N_CHANNELS = 4;
-// Correction factors
-const float cf[N_CHANNELS] = {
-  5.0*1.0,
-  5.0*1.0,
-  5.0*1.0,
-  5.0*1.1 
-};
-// Channel Names (JSON, Display)
-const char* cn[N_CHANNELS][2] = {
-  { "c0", "In P  " }, // input from panel
-  { "c1", "In C  " }, // input from charger
-  { "c2", "Out I " }, // output - internal
-  { "c3", "Out E " }  // output - external 
-};
 
 // Last data read or computed
 float bus_V[N_CHANNELS];
@@ -245,7 +276,8 @@ const unsigned int DP_CHARGE_PERCENT = 1;
 const unsigned int DP_BATTERY_VOLTAGE = 2;
 const unsigned int DP_PANEL_POWER = 3;
 const unsigned int DP_CYCLE_TIME = 4;
-const unsigned int N_DP = 5;
+const unsigned int DP_RELAY = 5;
+const unsigned int N_DP = 6;
 unsigned int disp_mode = DP_DETAILED;
 
 // observation mode
@@ -359,6 +391,33 @@ void disp_cycle_time() {
   print_flt(cycle/1000.0,6,2); PRINT("s");
 }
 
+// display relay state, highlighting selected relay
+int selected_relay = 0;
+void disp_relay() {
+  if (0 == rec_index) return; // no data yet
+
+  // Blank display, initialize options
+  M5.Lcd.setTextSize(15);
+  M5.Lcd.fillScreen( BLACK );
+  M5.Lcd.setCursor(0, 0);
+
+  M5.Lcd.setTextColor( WHITE ); 
+  PRINTLN("RELAY");
+  M5.Lcd.setTextSize(5);
+  for (int i=0; i<N_CHANNELS; i++) {
+    if (selected_relay == i) {
+       M5.Lcd.setTextColor( GREEN ); 
+       PRINT(">"); 
+       PRINT(cn[i][1]); 
+       PRINTLN(relay_state[i] ? "ON" : "OFF");
+    } else {
+       M5.Lcd.setTextColor( WHITE );
+       PRINT(" "); 
+       PRINT(cn[i][1]); 
+       PRINTLN(relay_state[i] ? "ON" : "OFF");
+    }
+  }
+}
 void pi(int w) {
   if (pretty) while (w > 0) {
     Serial.print(" ");
@@ -392,6 +451,7 @@ void send_rec(int w = 0) {
   ps();
   Serial.print(micros());
 }
+
 void send_channel(unsigned int ch, bool rec = true, int w = 0) {
   if (ch >= N_CHANNELS) return;
 
@@ -606,6 +666,45 @@ void send_period(int w = 0, bool rec = true) {
   Serial.print("}");
 }
 
+void send_relay(int w = 0, bool rec = true) {
+  Serial.print("{");
+  pe();
+
+  if (rec) {
+    send_rec(w+2);    
+    Serial.print(",");
+    pe();
+  }
+
+  pi(w+2);
+  Serial.print("\"relay0\":"); 
+  ps();
+  Serial.print(relay_state[0] ? 1 : 0); 
+  pe(",");
+
+  pi(w+2);
+  Serial.print("\"relay1\":"); 
+  ps();
+  Serial.print(relay_state[1] ? 1 : 0); 
+  pe(",");
+
+  
+  pi(w+2);
+  Serial.print("\"relay2\":"); 
+  ps();
+  Serial.print(relay_state[2] ? 1 : 0); 
+  pe(",");
+  
+  pi(w+2);
+  Serial.print("\"relay3\":"); 
+  ps();
+  Serial.print(relay_state[3] ? 1 : 0); 
+  pe();
+    
+  pi(w);
+  Serial.print("}");
+}
+
 void send_all() {
   // Report Detailed Data via Serial Formatted as JSON
   Serial.print("{");
@@ -673,13 +772,14 @@ void loop(void)
 
     ui_update = true;
   }  
-  // If B button released, increase update interval
+  
   if (M5.BtnB.wasReleased()) {
     Serial.print("\"B\":");
     ps();
     Serial.println("\"released\";");
 
     switch (disp_mode) {
+      // If B button released, increase update interval
       case DP_CYCLE_TIME: {
         cycle_count += cycle_inc;
         cycle = grain * cycle_count;
@@ -691,17 +791,23 @@ void loop(void)
 
         ui_update = true;
       } break;
+      // If B button was released, change selected relay
+      case DP_RELAY: {
+        selected_relay = (selected_relay + 1) % N_CHANNELS;
+        ui_update = true;
+      }
       default: {
       } break;
     }
   } 
-  // If C button released, decrease update interval
+  
   if (M5.BtnC.wasReleased()) {
     Serial.print("\"C\":");
     ps();
     Serial.println("\"released\";");
 
     switch (disp_mode) {
+      // If C button released, decrease update interval
       case DP_CYCLE_TIME: {
         cycle_count -= cycle_inc;
         if (cycle_count < 0) cycle_count = 0;
@@ -714,6 +820,17 @@ void loop(void)
 
         ui_update = true;
       } break;
+      // If C button was released, toggle selected relay
+      case DP_RELAY: {
+        relay_state[selected_relay] = !relay_state[selected_relay];
+        
+        Serial.print("\"r\":");
+        ps();
+        send_relay();
+        Serial.println(";");
+        
+        ui_update = true;
+      }
       default: {
       } break;
     }
@@ -806,6 +923,14 @@ void loop(void)
             }
             Serial.println(";");
           } break;
+          case 'r': {
+            if (i + 1 == k) {
+              send_relay(); 
+            } else {
+              Serial.print("\"unknown\"");
+            }
+            Serial.println(";");
+          } break;
           case 's': {
             if (i + 1 == k) {
               send_status(); 
@@ -863,6 +988,9 @@ void loop(void)
          break;
        case DP_CYCLE_TIME:
          disp_cycle_time();
+         break;
+       case DP_RELAY:
+         disp_relay();
          break;
        default:
          // Unknown display mode! Reset to 0
