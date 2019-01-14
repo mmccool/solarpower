@@ -36,13 +36,18 @@ const Adafruit_INA219* ina219[N_CHANNELS] = {
 };
 
 // Relays
-const int relay_pin[N_CHANNELS] = {
-  3, 
-  1, 
+const uint8_t relay_pin[N_CHANNELS] = {
   16, 
-  17
+  17,
+  2,
+  5
 };  // GPIOs for relays for above channels
-// Initial state of GPIOs
+// Initial state of relays
+//   Relays are active low, but interpretation
+//   of state here is that "true" is "closed"
+//   and "false" is "open".  Note also that
+//   "open" means "floating" and the voltage
+//   readings may be semi-bogus.
 bool relay_state[N_CHANNELS] = {
   false,
   false,
@@ -123,7 +128,7 @@ void setup(void)
   // Set up Relay control GPIOs
   for (int i=0; i<N_CHANNELS; i++) {
     pinMode(relay_pin[i],OUTPUT);
-    digitalWrite(relay_pin[i],relay_state[i] ? HIGH : LOW);
+    digitalWrite(relay_pin[i],relay_state[i] ? LOW : HIGH);
   }
 
   Serial.println("Measuring voltages and currents with INA219s");
@@ -241,6 +246,21 @@ void read_sensors () {
   cp = battery_capacity_Wh*cs;
 }
 
+// change relay state, also update GPIO (note: active low!)
+void set_relay(unsigned int i, bool new_state) {
+  if (i >= N_CHANNELS) return;
+  relay_state[i] = new_state;
+  // active low: "closing" relay ("on") means setting GPIO to LOW
+  digitalWrite(relay_pin[i],relay_state[i] ? LOW : HIGH);
+  delay(500); 
+  // avoid trying to switch too many relays too fast, as this
+  // will stress the power system
+}
+void toggle_relay(unsigned int i) {
+  if (i >= N_CHANNELS) return;
+  set_relay(i,!relay_state[i]);
+}
+
 #define PRINT(A)         {M5.Lcd.print(A);}
 #define PRINTLN(A)       {M5.Lcd.println(A);}
 #define PRINT_FLT(A,D)   {M5.Lcd.print(A,D);}
@@ -311,6 +331,7 @@ void disp_detailed() {
       PRINTLN("");
     }
   }
+  PRINTLN("");
 
   // Environmental Data
   M5.Lcd.setTextColor( GREEN ); 
@@ -744,6 +765,12 @@ void send_all() {
   pe(",");
 
   pi(2); 
+  Serial.print("\"r\":"); 
+  ps();
+  send_relay(2,false); 
+  pe(",");
+  
+  pi(2); 
   Serial.print("\"y\":"); 
   ps();
   send_period(2,false); 
@@ -751,6 +778,8 @@ void send_all() {
   
   Serial.print("}");
 }
+
+
 
 void loop(void) 
 {
@@ -822,7 +851,7 @@ void loop(void)
       } break;
       // If C button was released, toggle selected relay
       case DP_RELAY: {
-        relay_state[selected_relay] = !relay_state[selected_relay];
+        toggle_relay(selected_relay);
         
         Serial.print("\"r\":");
         ps();
