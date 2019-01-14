@@ -549,6 +549,14 @@ void send_power(int w = 0, bool rec = true) {
   Serial.print("\":");
   ps();
   send_channel(2,false,w+2);
+  pe(",");
+  
+  pi(w+2);
+  Serial.print("\"");
+  Serial.print(cn[3][0]);
+  Serial.print("\":");
+  ps();
+  send_channel(3,false,w+2);
   pe();
 
   pi(w);
@@ -939,13 +947,15 @@ void loop(void)
               } else {
                 Serial.print("\"unknown\"");
               }
-            } else {
+            } else if (i+1 == k) {
               send_observe_mode();
+            } else {
+              Serial.print("\"unknown\"");
             }
             Serial.println(";");
           } break;
           case 'e': {
-            if (i + 1 == k) {
+            if (i+1 == k) {
               send_env(); 
             } else {
               Serial.print("\"unknown\"");
@@ -953,15 +963,23 @@ void loop(void)
             Serial.println(";");
           } break;
           case 'r': {
-            if (i + 1 == k) {
-              send_relay(); 
+              if (isDigit(buffer[i+1])) {
+                 unsigned int relay_ch = (unsigned int)(buffer[i+1] - '0');
+                 if (relay_ch < N_CHANNELS) {
+                 toggle_relay(relay_ch);
+                 send_relay();
+              } else {
+                Serial.print("\"unknown\"");
+              }
+            } else if (i+1 == k) {
+              send_relay();
             } else {
               Serial.print("\"unknown\"");
             }
             Serial.println(";");
           } break;
           case 's': {
-            if (i + 1 == k) {
+            if (i+1 == k) {
               send_status(); 
             } else {
               Serial.print("\"unknown\"");
