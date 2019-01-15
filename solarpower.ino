@@ -8,6 +8,7 @@
 #include <Wire.h> 
 #include <Adafruit_INA219.h>
 #include <Adafruit_BMP280.h>
+#include "Free_Fonts.h"
 
 // Configuration
 const bool pretty = true; // pretty-print JSON data
@@ -18,6 +19,8 @@ const int cycle_inc = 10;
 const int grain = 5;
 
 // Sensors
+
+bool show_env = true;
 Adafruit_BMP280 bme; 
 DHT12 dht12;
 
@@ -73,10 +76,10 @@ const float cf[N_CHANNELS] = {
 
 // Channel Names (0:JSON, 1:Display)
 const char* cn[N_CHANNELS][2] = {
-  { "c0", "In P  " }, // input from panel
-  { "c1", "In C  " }, // input from charger
-  { "c2", "Out I " }, // output - internal
-  { "c3", "Out E " }  // output - external 
+  { "c0", "In P:  " }, // input from panel
+  { "c1", "In C:  " }, // input from charger
+  { "c2", "Out I: " }, // output - internal
+  { "c3", "Out E: " }  // output - external 
 };
 
 void setup(void) 
@@ -96,9 +99,10 @@ void setup(void)
   M5.Lcd.setBrightness(10);
   
   M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-  M5.Lcd.setTextSize(10);
-  M5.Lcd.setTextColor( YELLOW ); 
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK);
+  M5.Lcd.setFreeFont(FMB24);
 
   M5.Lcd.println("Solar");
   M5.Lcd.println("Power");
@@ -116,6 +120,7 @@ void setup(void)
   {
     if (!bme.begin(0x76)) {  
       Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+      show_env = false;
       //while (1);
     }
   }
@@ -164,12 +169,16 @@ void setup(void)
   Serial.println("a    - return all state, including modes and latest sensor readings");
   Serial.println("c    - return all the latest power readings");
   Serial.println("c<n> - return the power readings for channel n");
-  Serial.println("e    - return current environmental readings");
+  if (show_env) {
+    Serial.println("e    - return current environmental readings");
+  }
   Serial.println("d    - return current display mode");
   Serial.println("d<n> - set display mode");
   Serial.println("s    - return estimated battery charge status");
   Serial.println("o    - return current observe mode");
   Serial.println("o<n> - set observe mode on (n=1) or off (n=0)");
+  Serial.println("r    - return current relay settings");
+  Serial.println("r<n> - toggle state of relay n");
   Serial.println("y    - return current cycle time (sampling period)");
   Serial.println("y<n> - set current cycle time (number of grains)");
   Serial.println("------------------------------------------------------------------");
@@ -245,9 +254,11 @@ void read_sensors () {
   load_V[3] =    bus_V[3] + shunt_mV[3]/1000.0;
 
   // environmental sensors
-  temperature = dht12.readTemperature();
-  humidity = dht12.readHumidity();
-  pressure = bme.readPressure();
+  if (show_env) {
+    temperature = dht12.readTemperature();
+    humidity = dht12.readHumidity();
+    pressure = bme.readPressure();
+  }
 
   // charge state estimates
   cs = voltage_to_cs((bus_V[2]+bus_V[3])/2.0); // load voltage is also battery voltage
@@ -315,18 +326,22 @@ void disp_detailed() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(2);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 10);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
   int cw = 6; // column width
 
   // Power Flow Data
-  M5.Lcd.setTextColor( YELLOW ); 
-  PRINTLN("POWER");
-  M5.Lcd.setTextColor( WHITE );
-  PRINTLN("           V      A      W");
+  M5.Lcd.setFreeFont(FMB9);
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  PRINT("POWER");
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  PRINTLN("       V      A      W");
   for (int i; i<N_CHANNELS; i++) {
     PRINT(cn[i][1]);
+    M5.Lcd.setFreeFont(FM9);
     if (bus_V[i] > 32.7) {
       PRINTLN("     x      x      x");
     } else {
@@ -337,28 +352,38 @@ void disp_detailed() {
       print_flt(power_W[i],cw,2);
       PRINTLN("");
     }
+    M5.Lcd.setFreeFont(FMB9);
   }
   PRINTLN("");
 
   // Environmental Data
-  M5.Lcd.setTextColor( GREEN ); 
-  PRINTLN("ENVIRONMENT");
-  M5.Lcd.setTextColor( WHITE );
-  PRINT("T: "); 
-    PRINT(temperature);  
-    PRINTLN(" C");
-  PRINT("H: "); 
-    PRINT(humidity);     
-    PRINTLN(" %");
-  PRINT("P: "); 
-    PRINT(pressure);     
-    PRINTLN(" Pa");
-  PRINTLN("");  
+  if (show_env) {
+    M5.Lcd.setTextColor( TFT_GREEN, TFT_BLACK ); 
+    PRINTLN("ENVIRONMENT");
+    M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+    PRINT("Temperature: "); 
+      M5.Lcd.setFreeFont(FM9);
+      PRINT(temperature);  
+      PRINTLN(" C");
+    M5.Lcd.setFreeFont(FMB9);
+    PRINT("Humidity:    "); 
+      M5.Lcd.setFreeFont(FM9);
+      PRINT(humidity);     
+      PRINTLN(" %");
+    M5.Lcd.setFreeFont(FMB9);
+    PRINT("Pressure:    "); 
+      M5.Lcd.setFreeFont(FM9);
+      PRINT(pressure);     
+      PRINTLN(" Pa");
+    PRINTLN(""); 
+  } 
 
   // Charge Status (Estimated)
-  M5.Lcd.setTextColor( RED ); 
+  M5.Lcd.setFreeFont(FMB9);
+  M5.Lcd.setTextColor( TFT_RED, TFT_BLACK ); 
   PRINT("STATUS: ");
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FM9);
   print_flt(100*cs,3,0); PRINT(" %  ");
   print_flt(cp,4,0); PRINT(" Wh"); 
 }
@@ -368,12 +393,16 @@ void disp_charge_percent() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(15);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FMB24);
   PRINTLN("CHARGE");
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  M5.Lcd.setFreeFont(FM24);
   print_flt(100*cs,3,0); PRINT("%");
 }
 
@@ -382,12 +411,16 @@ void disp_battery_voltage() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(15);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FMB24);
   PRINTLN("BATTERY");
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  M5.Lcd.setFreeFont(FM24);
   print_flt(bus_V[2],6,2); PRINT("V");
 }
 
@@ -396,12 +429,16 @@ void disp_panel_power() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(15);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FMB24);
   PRINTLN("PANEL");
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  M5.Lcd.setFreeFont(FM24);
   print_flt(power_W[0],6,2); PRINT("W");
 }
 
@@ -410,12 +447,16 @@ void disp_cycle_time() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(15);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FMB24);
   PRINTLN("CYCLE");
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  M5.Lcd.setFreeFont(FM24);
   print_flt(cycle/1000.0,6,2); PRINT("s");
 }
 
@@ -425,24 +466,31 @@ void disp_relay() {
   if (0 == rec_index) return; // no data yet
 
   // Blank display, initialize options
-  M5.Lcd.setTextSize(15);
-  M5.Lcd.fillScreen( BLACK );
-  M5.Lcd.setCursor(0, 0);
-
-  M5.Lcd.setTextColor( WHITE ); 
+  M5.Lcd.fillScreen( TFT_BLACK );
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  M5.Lcd.setTextSize(1);
+  
+  M5.Lcd.setTextColor( TFT_YELLOW, TFT_BLACK ); 
+  M5.Lcd.setFreeFont(FMB24); 
   PRINTLN("RELAY");
-  M5.Lcd.setTextSize(5);
+  M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
+  
   for (int i=0; i<N_CHANNELS; i++) {
     if (selected_relay == i) {
-       M5.Lcd.setTextColor( GREEN ); 
+       M5.Lcd.setTextColor( TFT_GREEN, TFT_BLACK ); 
        PRINT(">"); 
        PRINT(cn[i][1]); 
+       M5.Lcd.setFreeFont(FM24);
        PRINTLN(relay_state[i] ? "ON" : "OFF");
+       M5.Lcd.setFreeFont(FMB24);
     } else {
-       M5.Lcd.setTextColor( WHITE );
+       M5.Lcd.setTextColor( TFT_WHITE, TFT_BLACK );
        PRINT(" "); 
        PRINT(cn[i][1]); 
+       M5.Lcd.setFreeFont(FM24);
        PRINTLN(relay_state[i] ? "ON" : "OFF");
+       M5.Lcd.setFreeFont(FMB24);
     }
   }
 }
@@ -570,9 +618,12 @@ void send_power(int w = 0, bool rec = true) {
   Serial.print("}");
 }
 void send_env(int w = 0, bool rec = true) {
+  // if no environmental data, send nothing
+  if (!show_env) return;
+  
   Serial.print("{");
   pe();
-
+  
   if (rec) {
     send_rec(w+2);    
     pe(","); 
@@ -754,12 +805,14 @@ void send_all() {
   ps();
   send_power(2,false); 
   pe(",");
-  
-  pi(2); 
-  Serial.print("\"e\":"); 
-  ps();
-  send_env(2,false); 
-  pe(",");
+
+  if (show_env) {
+    pi(2); 
+    Serial.print("\"e\":"); 
+    ps();
+    send_env(2,false); 
+    pe(",");
+  }
   
   pi(2); 
   Serial.print("\"s\":"); 
@@ -793,8 +846,6 @@ void send_all() {
   
   Serial.print("}");
 }
-
-
 
 void loop(void) 
 {
@@ -962,7 +1013,7 @@ void loop(void)
             Serial.println(";");
           } break;
           case 'e': {
-            if (i+1 == k) {
+            if (show_env && i+1 == k) {
               send_env(); 
             } else {
               Serial.print("\"unknown\"");
