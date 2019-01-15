@@ -64,10 +64,11 @@ bool relay_state[N_CHANNELS] = {
 
 
 // Measurement correction factors (for current only)
+//  Also takes into account polarity of connection
 const float cf[N_CHANNELS] = {
-  5.0*1.0,
-  5.0*1.0,
-  5.0*1.0,
+  -5.0*1.0,
+  -5.0*1.0,
+  -5.0*1.0,
   5.0*1.1 
 };
 
@@ -197,6 +198,7 @@ float temperature;
 float humidity;
 float pressure;
 
+float battery_V;  // battery voltage
 float cs;  // charge state; estimate % of capacity
 float cp;  // charge state; estimated Wh
 
@@ -230,14 +232,14 @@ void read_sensors () {
   power_W[1] =   cf[1]*ina219_B.getPower_mW()/1000.0;
   load_V[1] =    bus_V[1] + shunt_mV[1]/1000.0;
  
-  // voltage, current, and power on channel C/2 (output 1 - internal)
+  // voltage, current, and power on channel C/2 (output 1 - external)
   shunt_mV[2] =  ina219_C.getShuntVoltage_mV();
   bus_V[2] =     ina219_C.getBusVoltage_V();
   current_A[2] = cf[2]*ina219_C.getCurrent_mA()/1000.0;
   power_W[2] =   cf[2]*ina219_C.getPower_mW()/1000.0;
   load_V[2] =    bus_V[2] + shunt_mV[2]/1000.0;
 
-  // voltage, current, and power on channel D/3 (output 2 - external)
+  // voltage, current, and power on channel D/3 (output 2 - internal)
   shunt_mV[3] =  ina219_D.getShuntVoltage_mV();
   bus_V[3] =     ina219_D.getBusVoltage_V();
   current_A[3] = cf[3]*ina219_D.getCurrent_mA()/1000.0;
@@ -250,7 +252,8 @@ void read_sensors () {
   pressure = bme.readPressure();
 
   // charge state estimates
-  cs = voltage_to_cs((bus_V[2]+bus_V[3])/2.0); // load voltage is also battery voltage
+  battery_V = bus_V[3]; // internal load voltage is also battery voltage
+  cs = voltage_to_cs(battery_V); 
   cp = battery_capacity_Wh*cs;
 }
 
@@ -388,7 +391,7 @@ void disp_battery_voltage() {
 
   M5.Lcd.setTextColor( WHITE ); 
   PRINTLN("BATTERY");
-  print_flt(bus_V[2],6,2); PRINT("V");
+  print_flt(battery_V,6,2); PRINT("V");
 }
 
 // display panel power only on LCD
