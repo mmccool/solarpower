@@ -23,10 +23,10 @@ DHT12 dht12;
 
 const int N_CHANNELS = 4;
 
-Adafruit_INA219 ina219_A(0x40); // solar panel input
-Adafruit_INA219 ina219_B(0x41); // charger input
-Adafruit_INA219 ina219_C(0x44); // internal output
-Adafruit_INA219 ina219_D(0x45); // external output
+Adafruit_INA219 ina219_A(0x41); // solar panel input
+Adafruit_INA219 ina219_B(0x40); // charger input
+Adafruit_INA219 ina219_C(0x45); // internal output
+Adafruit_INA219 ina219_D(0x44); // external output
 
 const Adafruit_INA219* ina219[N_CHANNELS] = {
   &ina219_A,
@@ -36,24 +36,32 @@ const Adafruit_INA219* ina219[N_CHANNELS] = {
 };
 
 // Relays
+const uint8_t relay_open[N_CHANNELS] = {
+  HIGH,
+  HIGH,
+  HIGH,
+  HIGH
+};
+const uint8_t relay_closed[N_CHANNELS] = {
+  LOW,
+  LOW,
+  LOW,
+  LOW
+};
 const uint8_t relay_pin[N_CHANNELS] = {
-  16, 
+  5,
   17,
   2,
-  5
+  16
 };  // GPIOs for relays for above channels
-// Initial state of relays
-//   Relays are active low, but interpretation
-//   of state here is that "true" is "closed"
-//   and "false" is "open".  Note also that
-//   "open" means "floating" and the voltage
-//   readings may be semi-bogus.
+// Initial state of relays; true is "closed"
 bool relay_state[N_CHANNELS] = {
   false,
   false,
   false, 
   false
 };
+
 
 // Measurement correction factors (for current only)
 const float cf[N_CHANNELS] = {
@@ -77,6 +85,12 @@ void setup(void)
   Wire.begin();
   // Set standard I2C Speed ("fast" I2C does not work reliably with BMP280)
   Wire.setClock(100000);
+
+  // Set up Relay control GPIOs and initial state as soon as possible after boot
+  for (int i=0; i<N_CHANNELS; i++) {
+    pinMode(relay_pin[i],OUTPUT);
+    digitalWrite(relay_pin[i],relay_state[i]?relay_closed[i]:relay_open[i]);
+  }
 
   M5.Lcd.begin();
   M5.Lcd.setBrightness(10);
@@ -124,12 +138,6 @@ void setup(void)
   ina219_B.setCalibration_32V_2A();  // Charger nominal 16V, but may be slightly higher
   ina219_C.setCalibration_16V_400mA(); // Battery max 12.6V
   ina219_D.setCalibration_16V_400mA(); // Battery max 12.6V
-
-  // Set up Relay control GPIOs
-  for (int i=0; i<N_CHANNELS; i++) {
-    pinMode(relay_pin[i],OUTPUT);
-    digitalWrite(relay_pin[i],relay_state[i] ? LOW : HIGH);
-  }
 
   Serial.println("Measuring voltages and currents with INA219s");
   Serial.println("Measuring temperature and humidity with DHT12");
@@ -246,12 +254,11 @@ void read_sensors () {
   cp = battery_capacity_Wh*cs;
 }
 
-// change relay state, also update GPIO (note: active low!)
+// change relay state, also update corresponding GPIOs
 void set_relay(unsigned int i, bool new_state) {
   if (i >= N_CHANNELS) return;
   relay_state[i] = new_state;
-  // active low: "closing" relay ("on") means setting GPIO to LOW
-  digitalWrite(relay_pin[i],relay_state[i] ? LOW : HIGH);
+  digitalWrite(relay_pin[i],relay_state[i]?relay_closed[i]:relay_open[i]);
   delay(500); 
   // avoid trying to switch too many relays too fast, as this
   // will stress the power system
