@@ -19,7 +19,6 @@ const int cycle_inc = 10;
 const int grain = 5;
 
 // Sensors
-
 bool show_env = true;
 Adafruit_BMP280 bme; 
 DHT12 dht12;
@@ -69,12 +68,18 @@ bool relay_state[N_CHANNELS] = {
 
 
 // Measurement correction factors (for current only)
-//  Also takes into account polarity of connection
 const float cf[N_CHANNELS] = {
   -5.0*1.0,
   -5.0*1.0,
   -5.0*1.0,
   5.0*1.1 
+};
+// polarity of connection
+const int cpol[N_CHANNELS] = {
+  -1,
+  -1,
+  -1,
+   1 
 };
 
 // Channel Names (0:JSON, 1:Display)
@@ -230,30 +235,30 @@ float voltage_to_cs(float v) {
 // and store in above variables
 void read_sensors () {
   // voltage, current, and power on channel A/0 (solar panel input)
-  shunt_mV[0] =  ina219_A.getShuntVoltage_mV();
+  shunt_mV[0] =  cpol[0]*ina219_A.getShuntVoltage_mV();
   bus_V[0] =     ina219_A.getBusVoltage_V();
-  current_A[0] = cf[0]*ina219_A.getCurrent_mA()/1000.0;
+  current_A[0] = cpol[0]*cf[0]*ina219_A.getCurrent_mA()/1000.0;
   power_W[0] =   cf[0]*ina219_A.getPower_mW()/1000.0;
   load_V[0] =    bus_V[0] + shunt_mV[0]/1000.0;
 
   // voltage, current, and power on channel B/1 (backup charger) 
-  shunt_mV[1] =  ina219_B.getShuntVoltage_mV();
+  shunt_mV[1] =  cpol[1]*ina219_B.getShuntVoltage_mV();
   bus_V[1] =     ina219_B.getBusVoltage_V();
-  current_A[1] = cf[1]*ina219_B.getCurrent_mA()/1000.0;
+  current_A[1] = cpol[1]*cf[1]*ina219_B.getCurrent_mA()/1000.0;
   power_W[1] =   cf[1]*ina219_B.getPower_mW()/1000.0;
   load_V[1] =    bus_V[1] + shunt_mV[1]/1000.0;
  
   // voltage, current, and power on channel C/2 (output 1 - external)
-  shunt_mV[2] =  ina219_C.getShuntVoltage_mV();
+  shunt_mV[2] =  cpol[2]*ina219_C.getShuntVoltage_mV();
   bus_V[2] =     ina219_C.getBusVoltage_V();
-  current_A[2] = cf[2]*ina219_C.getCurrent_mA()/1000.0;
+  current_A[2] = cpol[2]*cf[2]*ina219_C.getCurrent_mA()/1000.0;
   power_W[2] =   cf[2]*ina219_C.getPower_mW()/1000.0;
   load_V[2] =    bus_V[2] + shunt_mV[2]/1000.0;
 
   // voltage, current, and power on channel D/3 (output 2 - internal)
-  shunt_mV[3] =  ina219_D.getShuntVoltage_mV();
+  shunt_mV[3] =  cpol[3]*ina219_D.getShuntVoltage_mV();
   bus_V[3] =     ina219_D.getBusVoltage_V();
-  current_A[3] = cf[3]*ina219_D.getCurrent_mA()/1000.0;
+  current_A[3] = cpol[3]*cf[3]*ina219_D.getCurrent_mA()/1000.0;
   power_W[3] =   cf[3]*ina219_D.getPower_mW()/1000.0;
   load_V[3] =    bus_V[3] + shunt_mV[3]/1000.0;
 
