@@ -28,8 +28,8 @@ const int N_CHANNELS = 4;
 
 Adafruit_INA219 ina219_A(0x41); // solar panel input
 Adafruit_INA219 ina219_B(0x40); // charger input
-Adafruit_INA219 ina219_C(0x45); // internal output
-Adafruit_INA219 ina219_D(0x44); // external output
+Adafruit_INA219 ina219_C(0x45); // external output
+Adafruit_INA219 ina219_D(0x44); // internal output
 
 const Adafruit_INA219* ina219[N_CHANNELS] = {
   &ina219_A,
@@ -40,16 +40,16 @@ const Adafruit_INA219* ina219[N_CHANNELS] = {
 
 // Relays
 const uint8_t relay_open[N_CHANNELS] = {
-  HIGH,
-  HIGH,
-  HIGH,
-  HIGH
+  LOW,  // nc, active low
+  LOW,  // nc, active low
+  HIGH, // no, active low
+  LOW   // nc, active low
 };
 const uint8_t relay_closed[N_CHANNELS] = {
+  HIGH,
+  HIGH,
   LOW,
-  LOW,
-  LOW,
-  LOW
+  HIGH
 };
 const uint8_t relay_pin[N_CHANNELS] = {
   5,
@@ -58,11 +58,13 @@ const uint8_t relay_pin[N_CHANNELS] = {
   16
 };  // GPIOs for relays for above channels
 // Initial state of relays; true is "closed"
+// For consistency, this should also align with power-off state,
+// although there may be a short glitch when the system powers on.
 bool relay_state[N_CHANNELS] = {
-  false,
-  false,
+  true,
+  true,
   false, 
-  false
+  true
 };
 
 
@@ -78,8 +80,8 @@ const float cf[N_CHANNELS] = {
 const char* cn[N_CHANNELS][2] = {
   { "c0", "In P:  " }, // input from panel
   { "c1", "In C:  " }, // input from charger
-  { "c2", "Out I: " }, // output - internal
-  { "c3", "Out E: " }  // output - external 
+  { "c2", "Out E: " }, // output - external
+  { "c3", "Out I: " }  // output - internal 
 };
 
 void setup(void) 
@@ -139,10 +141,10 @@ void setup(void)
   ina219_D.begin();
   
   // Set custom calibration ranges
-  ina219_A.setCalibration_32V_2A();  // Panel max 21V
-  ina219_B.setCalibration_32V_2A();  // Charger nominal 16V, but may be slightly higher
-  ina219_C.setCalibration_16V_400mA(); // Battery max 12.6V
-  ina219_D.setCalibration_16V_400mA(); // Battery max 12.6V
+  ina219_A.setCalibration_32V_2A();    // Panel max 21V
+  ina219_B.setCalibration_32V_2A();    // Charger nominal 16V, but may be slightly higher
+  ina219_C.setCalibration_16V_400mA(); // Output; battery max is 12.6V
+  ina219_D.setCalibration_16V_400mA(); // Output; battery max is 12.6V
 
   Serial.println("Measuring voltages and currents with INA219s");
   Serial.println("Measuring temperature and humidity with DHT12");
